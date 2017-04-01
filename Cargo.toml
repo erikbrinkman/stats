@@ -2,8 +2,11 @@
 name = "stats-cli"
 version = "0.0.0"
 authors = ["Erik Brinkman <erik.brinkman@gmail.com>"]
-publish = false
 readme = "README.md"
+homepage = "https://github.com/erikbrinkman/stats"
+repository = "https://github.com/erikbrinkman/stats.git"
+license = "MIT"
+description = "A command line statistics binary and package"
 
 [lib]
 name = "inc_stats"
