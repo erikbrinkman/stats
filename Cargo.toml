@@ -1,0 +1,17 @@
+[package]
+name = "stats-cli"
+version = "0.0.0"
+authors = ["Erik Brinkman <erik.brinkman@gmail.com>"]
+publish = false
+readme = "README.md"
+
+[lib]
+name = "inc_stats"
+
+[[bin]]
+name = "stats"
+doc = false
+
+[dependencies]
+clap = "^2.21"
+order-stat = "^0.1"

@@ -1,0 +1,9 @@
+# Rust #
+########
+/Cargo.lock
+/target
+
+# Vim #
+#######
+.*.un~
+.*.swp
