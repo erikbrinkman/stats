@@ -4,9 +4,13 @@ version = "0.0.0"
 authors = ["Erik Brinkman <erik.brinkman@gmail.com>"]
 readme = "README.md"
 homepage = "https://github.com/erikbrinkman/stats"
+documentation = "https://docs.rs/stats-cli"
 repository = "https://github.com/erikbrinkman/stats.git"
 license = "MIT"
 description = "A command line statistics binary and package"
+
+[badges]
+travis-ci = { repository = "https://github.com/erikbrinkman/stats.git" }
 
 [lib]
 name = "inc_stats"
