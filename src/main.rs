@@ -53,7 +53,7 @@ fn main() {
              .long("percentiles")
              .takes_value(true)
              .use_delimiter(true)
-             .help("Print arbitrary percentiles. The argument should be a comma delimited list of floats in [0, 100] (Note: computing any percentile takes O(n) space"))
+             .help("Print arbitrary percentiles. The argument should be a comma delimited list of floats in [0, 100] (Note: computing any percentile takes O(n) space)"))
         .arg(Arg::with_name("mode")
              .long("mode")
              .help("Print mode (Note: computing mode takes O(n) space"))
