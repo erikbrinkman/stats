@@ -1,6 +1,6 @@
 [package]
 name = "stats-cli"
-version = "0.0.4"
+version = "0.0.5"
 authors = ["Erik Brinkman <erik.brinkman@gmail.com>"]
 readme = "README.md"
 homepage = "https://github.com/erikbrinkman/stats"
