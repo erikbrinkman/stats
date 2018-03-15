@@ -110,7 +110,7 @@ fn main() {
 
     let add_mode = ["mode", "mode-count"].iter().any(|s| matches.is_present(s));
     let add_percs = ["percentiles", "median"].iter().any(|s| matches.is_present(s));
-    let add_stats = ["count", "min", "max", "mean", "sum", "stddev", "var", "stderr"].iter().any(|s| matches.is_present(s));
+    let add_stats = ["count", "min", "max", "mean", "sum", "stddev", "var", "stderr"].iter().any(|s| matches.is_present(s)) || !(add_mode && add_percs);
 
     // XXX Possible to do with Iterators and mapping? Issues with lifetimes
     for line in input.lines() {
