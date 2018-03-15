@@ -15,3 +15,4 @@ To Do
 
 - Add support for generic numeric data types, after they're more supported in rust.
 - Add sketches.
+- Add testing to cli
