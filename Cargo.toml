@@ -17,6 +17,7 @@ name = "inc_stats"
 
 [[bin]]
 name = "stats"
+path = "src/main.rs"
 doc = false
 
 [dependencies]
