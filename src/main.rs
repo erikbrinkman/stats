@@ -9,7 +9,7 @@ use inc_stats::{Mode, Percentiles, SummStats};
 
 fn parse_command_line<'a>() -> ArgMatches<'a> {
     App::new("stats")
-        .version("0.0")
+        .version("1.0")
         .author("Erik Brinkman <erik.brinkman@gmail.com>")
         .about("Compute summary statistics of streams of numbers")
         // Output
