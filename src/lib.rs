@@ -2,15 +2,12 @@
 //!
 //! This contains helper functions for computing statistics on iterators, as well as structs that
 //! support incremental addition of data.
-extern crate order_stat;
-
 use std::cmp::{Eq, Ordering};
 use std::collections::HashMap;
 use std::f64;
 use std::hash::{Hash, Hasher};
 use std::iter::FromIterator;
 use std::mem;
-
 
 /// Summary statistics struct
 ///
@@ -46,7 +43,14 @@ pub struct SummStats {
 impl SummStats {
     /// Create a new SummStats struct with no data
     pub fn new() -> Self {
-        SummStats{non_nan: false, count: 0, mean: 0.0, ssd: 0.0, min: f64::INFINITY, max: f64::NEG_INFINITY}
+        SummStats {
+            non_nan: false,
+            count: 0,
+            mean: 0.0,
+            ssd: 0.0,
+            min: f64::INFINITY,
+            max: f64::NEG_INFINITY,
+        }
     }
 
     /// Add a number
@@ -87,9 +91,10 @@ impl SummStats {
     /// assert!(stats.min().is_none());
     /// ```
     pub fn min(&self) -> Option<f64> {
-        match self.non_nan {
-            false => None,
-            true => Some(self.min),
+        if self.non_nan {
+            Some(self.min)
+        } else {
+            None
         }
     }
 
@@ -105,9 +110,10 @@ impl SummStats {
     /// assert!((4.0 - stats.max().unwrap()).abs() < 1.0e-6);
     /// ```
     pub fn max(&self) -> Option<f64> {
-        match self.non_nan {
-            false => None,
-            true => Some(self.max),
+        if self.non_nan {
+            Some(self.max)
+        } else {
+            None
         }
     }
 
@@ -183,7 +189,7 @@ impl SummStats {
     /// ```
     pub fn variance(&self) -> Option<f64> {
         match self.count {
-            0|1 => None,
+            0 | 1 => None,
             _ => Some(self.ssd / (self.count - 1) as f64),
         }
     }
@@ -200,13 +206,22 @@ impl SummStats {
     /// assert!((1.0 - stats.standard_error().unwrap()).abs() < 1.0e-6);
     /// ```
     pub fn standard_error(&self) -> Option<f64> {
-        self.standard_deviation().map(|d| d / (self.count as f64).sqrt())
+        self.standard_deviation()
+            .map(|d| d / (self.count as f64).sqrt())
     }
 }
 
+impl Default for SummStats {
+    fn default() -> Self {
+        SummStats::new()
+    }
+}
 
 impl FromIterator<f64> for SummStats {
-    fn from_iter<I>(iter: I) -> Self where I: IntoIterator<Item=f64> {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = f64>,
+    {
         let mut stats = SummStats::new();
         for val in iter {
             stats.add(val);
@@ -214,7 +229,6 @@ impl FromIterator<f64> for SummStats {
         stats
     }
 }
-
 
 /// Get the mean of a set of data
 ///
@@ -227,7 +241,10 @@ impl FromIterator<f64> for SummStats {
 /// let mean = inc_stats::mean(nums.iter().cloned()).unwrap();
 /// assert!((3.0 - mean).abs() < 1.0e-6);
 /// ```
-pub fn mean<I>(data: I) -> Option<f64> where I: Iterator<Item=f64> {
+pub fn mean<I>(data: I) -> Option<f64>
+where
+    I: Iterator<Item = f64>,
+{
     data.collect::<SummStats>().mean()
 }
 
@@ -262,7 +279,10 @@ pub struct Percentiles {
 impl Percentiles {
     /// Create a new Percentiles object with no data
     pub fn new() -> Self {
-        Percentiles{data: Vec::new(), in_order: Vec::new()}
+        Percentiles {
+            data: Vec::new(),
+            in_order: Vec::new(),
+        }
     }
 
     /// Add a data point
@@ -292,19 +312,23 @@ impl Percentiles {
     /// assert!((2.0 - quarts[1]).abs() < 1.0e-6);
     /// assert!((3.0 - quarts[2]).abs() < 1.0e-6);
     /// ```
-    pub fn percentiles<I>(&mut self, percentiles: I) -> Option<Vec<f64>> where I: Iterator<Item=f64> {
+    pub fn percentiles<I>(&mut self, percentiles: I) -> Option<Vec<f64>>
+    where
+        I: Iterator<Item = f64>,
+    {
         match self.data.len() {
             0 => None,
             _ => {
                 let mut indexed: Vec<(usize, f64)> = percentiles.enumerate().collect();
                 indexed.sort_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap());
                 let mut result = Vec::with_capacity(indexed.len());
-                unsafe {  // We will allocate everything in the following procedure
+                unsafe {
+                    // We will allocate everything in the following procedure
                     result.set_len(indexed.len());
                 }
                 self.percentile_recurse(&mut result, &indexed);
                 Some(result)
-            },
+            }
         }
     }
 
@@ -314,7 +338,7 @@ impl Percentiles {
             let (i, perc) = percs[index];
             result[i] = self.percentile(&perc).unwrap();
             self.percentile_recurse(result, &percs[..index]);
-            self.percentile_recurse(result, &percs[index+1..]);
+            self.percentile_recurse(result, &percs[index + 1..]);
         }
     }
 
@@ -333,8 +357,10 @@ impl Percentiles {
                 };
                 self.in_order.insert(insert, index);
                 // TODO Short circuit to min/max if index = start + 1 or end - 1
-                order_stat::kth_by(&mut self.data[start..end], index - start, |a, b| a.partial_cmp(b).unwrap());
-            },
+                order_stat::kth_by(&mut self.data[start..end], index - start, |a, b| {
+                    a.partial_cmp(b).unwrap()
+                });
+            }
             _ => (),
         }
     }
@@ -352,7 +378,10 @@ impl Percentiles {
     /// assert!((2.0 - quart).abs() < 1.0e-6);
     /// ```
     pub fn percentile(&mut self, percentile: &f64) -> Option<f64> {
-        assert!(&0.0 <= percentile && percentile <= &1.0, "all percentiles must be between 0 and 1");
+        assert!(
+            &0.0 <= percentile && percentile <= &1.0,
+            "all percentiles must be between 0 and 1"
+        );
         match self.data.len() {
             0 => None,
             _ => {
@@ -365,7 +394,7 @@ impl Percentiles {
                 let high = self.data[high_index];
                 let weight = p_index - low_index as f64;
                 Some(low * (1.0 - weight) + high * weight)
-            },
+            }
         }
     }
 
@@ -386,8 +415,17 @@ impl Percentiles {
     }
 }
 
+impl Default for Percentiles {
+    fn default() -> Self {
+        Percentiles::new()
+    }
+}
+
 impl FromIterator<f64> for Percentiles {
-    fn from_iter<I>(iter: I) -> Self where I: IntoIterator<Item=f64> {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = f64>,
+    {
         let mut percs = Percentiles::new();
         for val in iter {
             percs.add(val);
@@ -412,7 +450,10 @@ impl FromIterator<f64> for Percentiles {
 /// let med = inc_stats::median(std::iter::empty());
 /// assert!(med.is_none());
 /// ```
-pub fn median<I>(data: I) -> Option<f64> where I: Iterator<Item=f64> {
+pub fn median<I>(data: I) -> Option<f64>
+where
+    I: Iterator<Item = f64>,
+{
     data.collect::<Percentiles>().median()
 }
 
@@ -469,7 +510,12 @@ pub struct Mode {
 impl Mode {
     /// Create a new Mode object with no data
     pub fn new() -> Self {
-        Mode{counts: HashMap::new(), count: 0, mode: Vec::new(), mode_count: 0}
+        Mode {
+            counts: HashMap::new(),
+            count: 0,
+            mode: Vec::new(),
+            mode_count: 0,
+        }
     }
 
     /// Add a data point
@@ -571,7 +617,10 @@ impl Mode {
 }
 
 impl FromIterator<f64> for Mode {
-    fn from_iter<I>(iter: I) -> Self where I: IntoIterator<Item=f64> {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = f64>,
+    {
         let mut mode = Mode::new();
         for val in iter {
             mode.add(val);
@@ -597,6 +646,9 @@ impl FromIterator<f64> for Mode {
 /// let mode = inc_stats::mode(std::iter::empty());
 /// assert!(mode.is_none());
 /// ```
-pub fn mode<I>(data: I) -> Option<f64> where I: Iterator<Item=f64> {
+pub fn mode<I>(data: I) -> Option<f64>
+where
+    I: Iterator<Item = f64>,
+{
     data.collect::<Mode>().mode()
 }

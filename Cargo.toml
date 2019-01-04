@@ -8,6 +8,7 @@ documentation = "https://docs.rs/stats-cli"
 repository = "https://github.com/erikbrinkman/stats"
 license = "MIT"
 description = "A command line statistics binary and package"
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "erikbrinkman/stats" }
@@ -21,5 +22,5 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-clap = "^2.21"
+clap = "^2.23"
 order-stat = "^0.1"

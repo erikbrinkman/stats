@@ -1,18 +1,14 @@
-extern crate clap;
-extern crate inc_stats;
-
 use std::f64;
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::iter;
 
-use clap::{Arg, ArgGroup, App};
+use clap::{App, Arg, ArgGroup, ArgMatches};
 
-use inc_stats::{SummStats, Percentiles, Mode};
+use inc_stats::{Mode, Percentiles, SummStats};
 
-
-fn main() {
-    let matches = App::new("stats")
+fn parse_command_line<'a>() -> ArgMatches<'a> {
+    App::new("stats")
         .version("0.0")
         .author("Erik Brinkman <erik.brinkman@gmail.com>")
         .about("Compute summary statistics of streams of numbers")
@@ -83,14 +79,20 @@ fn main() {
              .value_name("file")
              .default_value("-")
              .help("Write output to file"))
-        .get_matches();
+        .get_matches()
+}
+
+fn main() {
+    let matches = parse_command_line();
 
     // Setup input
     let stdin = io::stdin();
     let input: Box<BufRead> = match matches.value_of("input") {
         Some("-") => Box::new(stdin.lock()),
         Some(file_name) => Box::new(io::BufReader::new(
-                File::open(file_name).expect(&format!("File \"{}\" does not exist", file_name)))),
+            File::open(file_name)
+                .unwrap_or_else(|_| panic!("File \"{}\" does not exist", file_name)),
+        )),
         None => unreachable!(),
     };
 
@@ -99,7 +101,9 @@ fn main() {
     let mut output: Box<Write> = match matches.value_of("output") {
         Some("-") => Box::new(stdout.lock()),
         Some(file_name) => Box::new(io::BufWriter::new(
-                File::open(file_name).expect(&format!("Couldn't open file \"{}\" for writing", file_name)))),
+            File::open(file_name)
+                .unwrap_or_else(|_| panic!("Couldn't open file \"{}\" for writing", file_name)),
+        )),
         None => unreachable!(),
     };
 
@@ -109,13 +113,26 @@ fn main() {
     let mut mode = Mode::new();
 
     let add_mode = ["mode", "mode-count"].iter().any(|s| matches.is_present(s));
-    let add_percs = ["percentiles", "median"].iter().any(|s| matches.is_present(s));
-    let add_stats = ["count", "min", "max", "mean", "sum", "stddev", "var", "stderr"].iter().any(|s| matches.is_present(s)) || !(add_mode && add_percs);
+    let add_percs = ["percentiles", "median"]
+        .iter()
+        .any(|s| matches.is_present(s));
+    let add_stats = [
+        "count", "min", "max", "mean", "sum", "stddev", "var", "stderr",
+    ]
+    .iter()
+    .any(|s| matches.is_present(s))
+        || !(add_mode && add_percs);
 
     // XXX Possible to do with Iterators and mapping? Issues with lifetimes
     for line in input.lines() {
-        for token in line.expect("Couldn't read from file").split(char::is_whitespace).filter(|s| !s.is_empty()) {
-            let num = token.parse().expect(&format!("Could not parse \"{}\" as float", token));
+        for token in line
+            .expect("Couldn't read from file")
+            .split(char::is_whitespace)
+            .filter(|s| !s.is_empty())
+        {
+            let num = token
+                .parse()
+                .unwrap_or_else(|_| panic!("Could not parse \"{}\" as float", token));
             if add_mode {
                 mode.add(num);
             }
@@ -129,6 +146,27 @@ fn main() {
     }
 
     // Generate output
+    let results = compute_results(&matches, &stats, &mut percs, &mode);
+
+    // Write output
+    if matches.is_present("tsv") {
+        write_tsv(&results, &mut *output);
+    } else if matches.is_present("json") {
+        write_json(&results, &mut *output);
+    } else if results.len() == 1 {
+        let (_, val) = results[0];
+        writeln!(output, "{}", val).expect("couldn't write to output");
+    } else {
+        write_tsv(&results, &mut *output);
+    }
+}
+
+fn compute_results(
+    matches: &ArgMatches<'_>,
+    stats: &SummStats,
+    percs: &mut Percentiles,
+    mode: &Mode,
+) -> Vec<(String, f64)> {
     let mut results = Vec::new();
     if matches.is_present("count") {
         results.push((String::from("count"), stats.count() as f64));
@@ -146,20 +184,34 @@ fn main() {
         results.push((String::from("sum"), stats.sum()));
     }
     if matches.is_present("stddev") {
-        results.push((String::from("stddev"), stats.standard_deviation().unwrap_or(f64::NAN)));
+        results.push((
+            String::from("stddev"),
+            stats.standard_deviation().unwrap_or(f64::NAN),
+        ));
     }
     if matches.is_present("var") {
         results.push((String::from("var"), stats.variance().unwrap_or(f64::NAN)));
     }
     if matches.is_present("stderr") {
-        results.push((String::from("stderr"), stats.standard_error().unwrap_or(f64::NAN)));
+        results.push((
+            String::from("stderr"),
+            stats.standard_error().unwrap_or(f64::NAN),
+        ));
     }
     if matches.is_present("percentiles") {
-        let percentiles: Vec<f64> = matches.values_of("percentiles").unwrap().map(|p| p.parse::<f64>().expect(&format!("Could not parse \"{}\" as float", p))).collect();
-        let vals: Box<Iterator<Item=f64>> = match percs.percentiles(percentiles.iter().map(|p| p / 100.0)) {
-            None => Box::new(iter::repeat(f64::NAN).take(percentiles.len())),
-            Some(pvals) => Box::new(pvals.into_iter()),
-        };
+        let percentiles: Vec<f64> = matches
+            .values_of("percentiles")
+            .unwrap()
+            .map(|p| {
+                p.parse::<f64>()
+                    .unwrap_or_else(|_| panic!("Could not parse \"{}\" as float", p))
+            })
+            .collect();
+        let vals: Box<Iterator<Item = f64>> =
+            match percs.percentiles(percentiles.iter().map(|p| p / 100.0)) {
+                None => Box::new(iter::repeat(f64::NAN).take(percentiles.len())),
+                Some(pvals) => Box::new(pvals.into_iter()),
+            };
         for (perc, val) in percentiles.iter().zip(vals) {
             results.push((format!("{}%", perc), val));
         }
@@ -173,36 +225,29 @@ fn main() {
     if matches.is_present("mode-count") {
         results.push((String::from("mode #"), mode.mode_count() as f64));
     }
-    
+
     // Defaults
     if results.is_empty() {
         results.push((String::from("count"), stats.count() as f64));
         results.push((String::from("min"), stats.min().unwrap_or(f64::NAN)));
         results.push((String::from("max"), stats.max().unwrap_or(f64::NAN)));
         results.push((String::from("mean"), stats.mean().unwrap_or(f64::NAN)));
-        results.push((String::from("stddev"), stats.standard_deviation().unwrap_or(f64::NAN)));
+        results.push((
+            String::from("stddev"),
+            stats.standard_deviation().unwrap_or(f64::NAN),
+        ));
     }
 
-    // Write output
-    if matches.is_present("tsv") {
-        write_tsv(&results, &mut *output);
-    } else if matches.is_present("json") {
-        write_json(&results, &mut *output);
-    } else if results.len() == 1 {
-        let (_, val) = results[0];
-        writeln!(output, "{}", val).expect("couldn't write to output");
-    } else {
-        write_tsv(&results, &mut *output);
-    }
+    results
 }
 
-fn write_tsv(results: &Vec<(String, f64)>, output: &mut Write) {
+fn write_tsv(results: &[(String, f64)], output: &mut Write) {
     for &(ref name, ref val) in results {
         writeln!(output, "{}\t{}", name, val).expect("couldn't write to output");
     }
 }
 
-fn write_json(results: &Vec<(String, f64)>, output: &mut Write) {
+fn write_json(results: &[(String, f64)], output: &mut Write) {
     write!(output, "{{").expect("couldn't write to output");
     let mut iter = results.iter();
     let &(ref name, ref val) = iter.next().unwrap();
@@ -210,5 +255,5 @@ fn write_json(results: &Vec<(String, f64)>, output: &mut Write) {
     for &(ref name, ref val) in iter {
         write!(output, ",\"{}\":{}", name, val).expect("couldn't write to output");
     }
-    write!(output, "}}\n").expect("couldn't write to output");
+    writeln!(output, "}}").expect("couldn't write to output");
 }
