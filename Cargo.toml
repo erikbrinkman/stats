@@ -22,5 +22,5 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-clap = "^2.23"
+clap = "^2.33"
 order-stat = "^0.1"

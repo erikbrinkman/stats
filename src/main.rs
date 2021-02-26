@@ -87,7 +87,7 @@ fn main() {
 
     // Setup input
     let stdin = io::stdin();
-    let input: Box<BufRead> = match matches.value_of("input") {
+    let input: Box<dyn BufRead> = match matches.value_of("input") {
         Some("-") => Box::new(stdin.lock()),
         Some(file_name) => Box::new(io::BufReader::new(
             File::open(file_name)
@@ -98,7 +98,7 @@ fn main() {
 
     // Setup output
     let stdout = io::stdout();
-    let mut output: Box<Write> = match matches.value_of("output") {
+    let mut output: Box<dyn Write> = match matches.value_of("output") {
         Some("-") => Box::new(stdout.lock()),
         Some(file_name) => Box::new(io::BufWriter::new(
             File::open(file_name)
@@ -207,7 +207,7 @@ fn compute_results(
                     .unwrap_or_else(|_| panic!("Could not parse \"{}\" as float", p))
             })
             .collect();
-        let vals: Box<Iterator<Item = f64>> =
+        let vals: Box<dyn Iterator<Item = f64>> =
             match percs.percentiles(percentiles.iter().map(|p| p / 100.0)) {
                 None => Box::new(iter::repeat(f64::NAN).take(percentiles.len())),
                 Some(pvals) => Box::new(pvals.into_iter()),
@@ -241,13 +241,13 @@ fn compute_results(
     results
 }
 
-fn write_tsv(results: &[(String, f64)], output: &mut Write) {
+fn write_tsv(results: &[(String, f64)], output: &mut dyn Write) {
     for &(ref name, ref val) in results {
         writeln!(output, "{}\t{}", name, val).expect("couldn't write to output");
     }
 }
 
-fn write_json(results: &[(String, f64)], output: &mut Write) {
+fn write_json(results: &[(String, f64)], output: &mut dyn Write) {
     write!(output, "{{").expect("couldn't write to output");
     let mut iter = results.iter();
     let &(ref name, ref val) = iter.next().unwrap();
