@@ -1,6 +1,6 @@
 use std::f64;
 use std::fs::File;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, StdinLock, StdoutLock, Write};
 use std::iter;
 
 use clap::{App, Arg, ArgGroup, ArgMatches};
@@ -82,14 +82,67 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .get_matches()
 }
 
+// TODO this technique is probablly better handled by enum_dispatch but it doesn't work for these
+// types at the current moment
+enum StatsReader<'a> {
+    Stdin(StdinLock<'a>),
+    File(BufReader<File>),
+}
+
+impl<'a> Read for StatsReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            StatsReader::Stdin(lock) => lock.read(buf),
+            StatsReader::File(file) => file.read(buf),
+        }
+    }
+}
+
+impl<'a> BufRead for StatsReader<'a> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        match self {
+            StatsReader::Stdin(lock) => lock.fill_buf(),
+            StatsReader::File(file) => file.fill_buf(),
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        match self {
+            StatsReader::Stdin(lock) => lock.consume(amt),
+            StatsReader::File(file) => file.consume(amt),
+        }
+    }
+}
+
+enum StatsWriter<'a> {
+    Stdout(StdoutLock<'a>),
+    File(BufWriter<File>),
+}
+
+impl<'a> Write for StatsWriter<'a> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            StatsWriter::Stdout(lock) => lock.write(buf),
+            StatsWriter::File(file) => file.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            StatsWriter::Stdout(lock) => lock.flush(),
+            StatsWriter::File(file) => file.flush(),
+        }
+    }
+}
+
 fn main() {
     let matches = parse_command_line();
 
     // Setup input
     let stdin = io::stdin();
-    let input: Box<dyn BufRead> = match matches.value_of("input") {
-        Some("-") => Box::new(stdin.lock()),
-        Some(file_name) => Box::new(io::BufReader::new(
+    let input = match matches.value_of("input") {
+        Some("-") => StatsReader::Stdin(stdin.lock()),
+        Some(file_name) => StatsReader::File(BufReader::new(
             File::open(file_name)
                 .unwrap_or_else(|_| panic!("File \"{}\" does not exist", file_name)),
         )),
@@ -98,12 +151,13 @@ fn main() {
 
     // Setup output
     let stdout = io::stdout();
-    let mut output: Box<dyn Write> = match matches.value_of("output") {
-        Some("-") => Box::new(stdout.lock()),
-        Some(file_name) => Box::new(io::BufWriter::new(
-            File::open(file_name)
-                .unwrap_or_else(|_| panic!("Couldn't open file \"{}\" for writing", file_name)),
-        )),
+    let mut output = match matches.value_of("output") {
+        Some("-") => StatsWriter::Stdout(stdout.lock()),
+        Some(file_name) => {
+            StatsWriter::File(BufWriter::new(File::open(file_name).unwrap_or_else(|_| {
+                panic!("Couldn't open file \"{}\" for writing", file_name)
+            })))
+        }
         None => unreachable!(),
     };
 
@@ -123,14 +177,13 @@ fn main() {
     .any(|s| matches.is_present(s))
         || !(add_mode && add_percs);
 
-    // XXX Possible to do with Iterators and mapping? Issues with lifetimes
     for line in input.lines() {
         for token in line
             .expect("Couldn't read from file")
             .split(char::is_whitespace)
             .filter(|s| !s.is_empty())
         {
-            let num = token
+            let num: f64 = token
                 .parse()
                 .unwrap_or_else(|_| panic!("Could not parse \"{}\" as float", token));
             if add_mode {
@@ -150,14 +203,14 @@ fn main() {
 
     // Write output
     if matches.is_present("tsv") {
-        write_tsv(&results, &mut *output);
+        write_tsv(&results, &mut output);
     } else if matches.is_present("json") {
-        write_json(&results, &mut *output);
+        write_json(&results, &mut output);
     } else if results.len() == 1 {
         let (_, val) = results[0];
         writeln!(output, "{}", val).expect("couldn't write to output");
     } else {
-        write_tsv(&results, &mut *output);
+        write_tsv(&results, &mut output);
     }
 }
 
@@ -207,11 +260,11 @@ fn compute_results(
                     .unwrap_or_else(|_| panic!("Could not parse \"{}\" as float", p))
             })
             .collect();
-        let vals: Box<dyn Iterator<Item = f64>> =
-            match percs.percentiles(percentiles.iter().map(|p| p / 100.0)) {
-                None => Box::new(iter::repeat(f64::NAN).take(percentiles.len())),
-                Some(pvals) => Box::new(pvals.into_iter()),
-            };
+        let vals = match percs.percentiles(percentiles.iter().map(|p| p / 100.0)) {
+            Err(_) => panic!("percentiles must between 0 and 100: {:?}", percentiles),
+            Ok(None) => iter::repeat(f64::NAN).take(percentiles.len()).collect(),
+            Ok(Some(pvals)) => pvals,
+        };
         for (perc, val) in percentiles.iter().zip(vals) {
             results.push((format!("{}%", perc), val));
         }
@@ -241,13 +294,13 @@ fn compute_results(
     results
 }
 
-fn write_tsv(results: &[(String, f64)], output: &mut dyn Write) {
+fn write_tsv(results: &[(String, f64)], output: &mut impl Write) {
     for &(ref name, ref val) in results {
         writeln!(output, "{}\t{}", name, val).expect("couldn't write to output");
     }
 }
 
-fn write_json(results: &[(String, f64)], output: &mut dyn Write) {
+fn write_json(results: &[(String, f64)], output: &mut impl Write) {
     write!(output, "{{").expect("couldn't write to output");
     let mut iter = results.iter();
     let &(ref name, ref val) = iter.next().unwrap();

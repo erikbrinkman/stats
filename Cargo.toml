@@ -10,9 +10,6 @@ license = "MIT"
 description = "A command line statistics binary and package"
 edition = "2018"
 
-[badges]
-travis-ci = { repository = "erikbrinkman/stats" }
-
 [lib]
 name = "inc_stats"
 
@@ -24,3 +21,4 @@ doc = false
 [dependencies]
 clap = "^2.33"
 order-stat = "^0.1"
+num-traits = "^0.2"
