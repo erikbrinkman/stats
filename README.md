@@ -1,9 +1,10 @@
 Stats CLI
 =========
 
-[![Crates.io](https://img.shields.io/crates/v/stats-cli.svg)](https://crates.io/crates/stats-cli)
-[![Documentation](https://docs.rs/stats-cli/badge.svg)](https://docs.rs/stats-cli)
-[![Build Status](https://github.com/erikbrinkman/stats/workflows/build/badge.svg)](https://github.com/erikbrinkman/stats/actions)
+[![crates.io](https://img.shields.io/crates/v/stats-cli)](https://crates.io/crates/stats-cli)
+[![documentation](https://docs.rs/stats-cli/badge.svg)](https://docs.rs/stats-cli)
+[![tests](https://github.com/erikbrinkman/stats/actions/workflows/rust.yml/badge.svg)](https://github.com/erikbrinkman/stats/actions/workflows/rust.yml)
+![MIT License](https://img.shields.io/github/license/erikbrinkman/stats)
 
 Rust package for efficiently computing statistics on floating point numbers from the command line.
 This contains both a command line binary and a rust library with incremental statistics objects.
