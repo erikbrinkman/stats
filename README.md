@@ -10,9 +10,12 @@ Rust package for efficiently computing statistics on floating point numbers from
 This contains both a command line binary and a rust library with incremental statistics objects.
 Currently only summary statistics (min, mean, variance), percentiles, and mode are supported.
 
+See the rust documentation for the library api, or the cli help for usage.
+
 
 To Do
 -----
 
-- [ ] Add sketches.
+- [ ] Add sketches (many other crates do this)
 - [ ] Add testing to cli
+- [ ] Weigh tradeoffs behind `DerefCopy` trait vs `Borrow + Copy`
