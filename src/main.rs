@@ -56,6 +56,12 @@ fn parse_command_line<'a>() -> ArgMatches<'a> {
         .arg(Arg::with_name("mode-count")
              .long("mode-count")
              .help("Print the number of times the mode occured (Note: computing mode takes O(n) space"))
+        .arg(Arg::with_name("distinct")
+             .long("distinct")
+             .help("Print the number of distinct values (Note: computing mode takes O(n) space"))
+        .arg(Arg::with_name("distinct-nan")
+             .long("distinct-nan")
+             .help("Print the number of distinct values treading all NaNs as distinct (Note: computing mode takes O(n) space"))
         // Formatting
         .group(ArgGroup::with_name("format").args(&["tsv", "json"]))
         .arg(Arg::with_name("tsv")
@@ -166,7 +172,9 @@ fn main() {
     let mut percs = Percentiles::new();
     let mut mode = Mode::new();
 
-    let add_mode = ["mode", "mode-count"].iter().any(|s| matches.is_present(s));
+    let add_mode = ["mode", "mode-count", "distinct", "distinct-nan"]
+        .iter()
+        .any(|s| matches.is_present(s));
     let add_percs = ["percentiles", "median"]
         .iter()
         .any(|s| matches.is_present(s));
@@ -215,10 +223,10 @@ fn main() {
 }
 
 fn compute_results(
-    matches: &ArgMatches<'_>,
-    stats: &SummStats,
-    percs: &mut Percentiles,
-    mode: &Mode,
+    matches: &ArgMatches,
+    stats: &SummStats<f64>,
+    percs: &mut Percentiles<f64>,
+    mode: &Mode<f64>,
 ) -> Vec<(String, f64)> {
     let mut results = Vec::new();
     if matches.is_present("count") {
@@ -277,6 +285,15 @@ fn compute_results(
     }
     if matches.is_present("mode-count") {
         results.push((String::from("mode #"), mode.mode_count() as f64));
+    }
+    if matches.is_present("distinct") {
+        results.push((String::from("distinct"), mode.count_distinct() as f64));
+    }
+    if matches.is_present("distinct-nan") {
+        results.push((
+            String::from("distinct (NaN)"),
+            mode.count_distinct_nan() as f64,
+        ));
     }
 
     // Defaults

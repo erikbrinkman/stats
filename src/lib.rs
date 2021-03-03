@@ -10,13 +10,12 @@ use bytes::ToBytes;
 pub use copy::DerefCopy;
 use num_traits::{Float, FromPrimitive};
 use std::cell::RefCell;
-use std::cmp::{Eq, Ordering};
+use std::cmp::{self, Eq};
 use std::collections::{BTreeSet, HashMap};
 use std::f64;
 use std::hash::{Hash, Hasher};
-use std::iter::{self, Copied, FromIterator};
+use std::iter::{self, FromIterator};
 use std::ops::AddAssign;
-use std::slice::Iter;
 pub use utils::StatsError;
 
 /// Summary statistics struct
@@ -35,11 +34,11 @@ pub use utils::StatsError;
 /// ```
 ///
 /// ```
-/// let stats: inc_stats::SummStats = [2.0, 4.0, 8.0].iter().collect();
+/// let stats: inc_stats::SummStats<f64> = [2.0, 4.0, 8.0].iter().collect();
 /// assert_eq!(3, stats.count());
 /// ```
 #[derive(Debug)]
-pub struct SummStats<T: Float + FromPrimitive + AddAssign = f64> {
+pub struct SummStats<T: Float + FromPrimitive + AddAssign> {
     non_nan: bool,
     count: u64,
     mean: T,
@@ -126,7 +125,7 @@ impl<T: Float + FromPrimitive + AddAssign> SummStats<T> {
     /// # Examples
     ///
     /// ```
-    /// let stats: inc_stats::SummStats = [2.0, 4.0, std::f64::NAN].iter().collect();
+    /// let stats: inc_stats::SummStats<_> = [2.0, 4.0, std::f64::NAN].iter().collect();
     /// assert_eq!(2.0, stats.min().unwrap());
     /// ```
     ///
@@ -150,7 +149,7 @@ impl<T: Float + FromPrimitive + AddAssign> SummStats<T> {
     /// # Examples
     ///
     /// ```
-    /// let stats: inc_stats::SummStats = [2.0, 4.0, std::f64::NAN].iter().collect();
+    /// let stats: inc_stats::SummStats<_> = [2.0, 4.0, std::f64::NAN].iter().collect();
     /// assert_eq!(4.0, stats.max().unwrap());
     /// ```
     pub fn max(&self) -> Option<T> {
@@ -168,7 +167,7 @@ impl<T: Float + FromPrimitive + AddAssign> SummStats<T> {
     /// # Examples
     ///
     /// ```
-    /// let stats: inc_stats::SummStats = [2.0, 4.0].iter().collect();
+    /// let stats: inc_stats::SummStats<f64> = [2.0, 4.0].iter().collect();
     /// assert!((3.0 - stats.mean().unwrap()).abs() < 1.0e-6);
     /// ```
     ///
@@ -190,7 +189,7 @@ impl<T: Float + FromPrimitive + AddAssign> SummStats<T> {
     /// # Examples
     ///
     /// ```
-    /// let stats: inc_stats::SummStats = [2.0, 4.0].iter().collect();
+    /// let stats: inc_stats::SummStats<f64> = [2.0, 4.0].iter().collect();
     /// assert!((6.0 - stats.sum()).abs() < 1.0e-6);
     /// ```
     pub fn sum(&self) -> T {
@@ -204,7 +203,7 @@ impl<T: Float + FromPrimitive + AddAssign> SummStats<T> {
     /// # Examples
     ///
     /// ```
-    /// let stats: inc_stats::SummStats = [2.0, 4.0].iter().collect();
+    /// let stats: inc_stats::SummStats<f64> = [2.0, 4.0].iter().collect();
     /// assert!((1.4142136 - stats.standard_deviation().unwrap()).abs() < 1.0e-6);
     /// ```
     pub fn standard_deviation(&self) -> Option<T> {
@@ -218,7 +217,7 @@ impl<T: Float + FromPrimitive + AddAssign> SummStats<T> {
     /// # Examples
     ///
     /// ```
-    /// let stats: inc_stats::SummStats = [2.0, 4.0].iter().collect();
+    /// let stats: inc_stats::SummStats<f64> = [2.0, 4.0].iter().collect();
     /// assert!((2.0 - stats.variance().unwrap()).abs() < 1.0e-6);
     /// ```
     ///
@@ -242,7 +241,7 @@ impl<T: Float + FromPrimitive + AddAssign> SummStats<T> {
     /// # Examples
     ///
     /// ```
-    /// let stats: inc_stats::SummStats = [2.0, 4.0].iter().collect();
+    /// let stats: inc_stats::SummStats<f64> = [2.0, 4.0].iter().collect();
     /// assert!((1.0 - stats.standard_error().unwrap()).abs() < 1.0e-6);
     /// ```
     pub fn standard_error(&self) -> Option<T> {
@@ -344,6 +343,11 @@ impl<T: Float + FromPrimitive> CachedOrdering<T> {
 /// This struct stores data to allow efficient computation of percentiles. This struct takes linear
 /// space. It implements FromIterator to allow collection. This collection ignores NaNs.
 ///
+/// The structure is designed for efficient computation of percentiles when data is added and then
+/// percentiles are computed. Adding data is constant time, querying percentiles is linear time,
+/// with some caching to make it faster for computing several percentiles. If you were going to
+/// query percentiles while adding data, then you probably want to use a different data structure.
+///
 /// # Examples
 ///
 /// ```
@@ -355,11 +359,11 @@ impl<T: Float + FromPrimitive> CachedOrdering<T> {
 /// ```
 ///
 /// ```
-/// let percs: inc_stats::Percentiles = [2.0, 4.0, 8.0].iter().collect();
+/// let percs: inc_stats::Percentiles<f64> = [2.0, 4.0, 8.0].iter().collect();
 /// assert_eq!(3, percs.count());
 /// ```
 #[derive(Debug)]
-pub struct Percentiles<T: Float + FromPrimitive = f64> {
+pub struct Percentiles<T: Float + FromPrimitive> {
     data: RefCell<CachedOrdering<T>>,
     nan_count: usize,
 }
@@ -397,12 +401,16 @@ impl<T: Float + FromPrimitive> Percentiles<T> {
     /// # Examples:
     ///
     /// ```
-    /// let percs: inc_stats::Percentiles = [1.0, 3.0, 7.0].iter().collect();
+    /// let percs: inc_stats::Percentiles<f64> = [1.0, 3.0, 7.0].iter().collect();
     /// let quarts = percs.percentiles(&[0.75, 0.25, 0.5]).unwrap().unwrap();
     /// assert!((5.0 - quarts[0]).abs() < 1.0e-6);
     /// assert!((2.0 - quarts[1]).abs() < 1.0e-6);
     /// assert!((3.0 - quarts[2]).abs() < 1.0e-6);
     /// ```
+    // NOTE inside out does not guarantee worst case linear complexity. Asking for percentiles that
+    // correspond to the 1st, 2nd, 3rd, index etc will still have `log p * n` complexity (versus `p
+    // * n` for the native way). If we instead picked the percentiles closest to the midpoint of
+    // the remaining space, the complexity would drop to `log p + n`, which is just n.
     pub fn percentiles<P, I>(&self, percentiles: I) -> Result<Option<Vec<T>>, StatsError>
     where
         P: DerefCopy<Output = f64>,
@@ -443,7 +451,7 @@ impl<T: Float + FromPrimitive> Percentiles<T> {
     /// # Examples:
     ///
     /// ```
-    /// let percs: inc_stats::Percentiles = [1.0, 5.0].iter().collect();
+    /// let percs: inc_stats::Percentiles<f64> = [1.0, 5.0].iter().collect();
     /// let quart = percs.percentile(0.25).unwrap().unwrap();
     /// assert!((2.0 - quart).abs() < 1.0e-6);
     /// ```
@@ -483,7 +491,7 @@ impl<T: Float + FromPrimitive> Percentiles<T> {
     /// # Examples:
     ///
     /// ```
-    /// let percs: inc_stats::Percentiles = [1.0, 5.0, 100.0].iter().collect();
+    /// let percs: inc_stats::Percentiles<f64> = [1.0, 5.0, 100.0].iter().collect();
     /// let med = percs.median().unwrap();
     /// assert_eq!(5.0, med);
     /// ```
@@ -535,18 +543,8 @@ where
     data.into_iter().collect::<Percentiles<T>>().median()
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct HashFloat<T: Float + ToBytes>(T);
-
-// nan treated as equal
-impl<T: Float + ToBytes> PartialEq for HashFloat<T> {
-    fn eq(&self, other: &Self) -> bool {
-        match self.0.partial_cmp(&other.0) {
-            Some(res) => res == Ordering::Equal,
-            None => self.0.is_nan() && other.0.is_nan(),
-        }
-    }
-}
 
 impl<T: Float + ToBytes> Eq for HashFloat<T> {}
 
@@ -572,13 +570,14 @@ impl<T: Float + ToBytes> Hash for HashFloat<T> {
 /// ```
 ///
 /// ```
-/// let mode: inc_stats::Mode = [2.0, 4.0, 8.0].iter().collect();
+/// let mode: inc_stats::Mode<f64> = [2.0, 4.0, 8.0].iter().collect();
 /// assert_eq!(3, mode.count());
 /// ```
 #[derive(Debug)]
-pub struct Mode<T: Float + ToBytes = f64> {
+pub struct Mode<T: Float + ToBytes> {
     counts: HashMap<HashFloat<T>, usize>,
     count: usize,
+    nan_count: usize,
     mode: Vec<T>,
     mode_count: usize,
 }
@@ -589,6 +588,7 @@ impl<T: Float + ToBytes> Mode<T> {
         Mode {
             counts: HashMap::new(),
             count: 0,
+            nan_count: 0,
             mode: Vec::new(),
             mode_count: 0,
         }
@@ -598,7 +598,9 @@ impl<T: Float + ToBytes> Mode<T> {
     pub fn add(&mut self, rval: impl DerefCopy<Output = T>) {
         let val = rval.deref_copy();
         self.count += 1;
-        if !val.is_nan() {
+        if val.is_nan() {
+            self.nan_count += 1;
+        } else {
             let val_count = self.counts.entry(HashFloat(val)).or_insert(0);
             *val_count += 1;
             if *val_count > self.mode_count {
@@ -612,14 +614,63 @@ impl<T: Float + ToBytes> Mode<T> {
     }
 
     /// Get the number of data points
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let num: inc_stats::Mode<_> = [1.0, 2.0, std::f64::NAN].iter().collect();
+    /// assert_eq!(3, num.count());
+    /// ```
     pub fn count(&self) -> usize {
         self.count
     }
 
+    /// Count the number of distinct values
+    ///
+    /// Distinctness for floating points is very finicy. Values that may print the same may not be
+    /// same underlying value. Computations that yield the same value in "real" math may not yield
+    /// the same value in floating point math.
+    ///
+    /// This ignores nans
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let num: inc_stats::Mode<_> = [1.0, 2.0, 2.0, std::f64::NAN].iter().collect();
+    /// assert_eq!(2, num.count_distinct());
+    /// ```
+    pub fn count_distinct(&self) -> usize {
+        self.counts.len()
+    }
+
+    /// Count the number of distinct values
+    ///
+    /// This treats all NaNs as different
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let num: inc_stats::Mode<_> = [1.0, std::f64::NAN, std::f64::NAN].iter().collect();
+    /// assert_eq!(3, num.count_distinct_nan());
+    /// ```
+    ///
+    /// Treat all nans the same
+    /// ```
+    /// let num: inc_stats::Mode<_> = [1.0, std::f64::NAN, std::f64::NAN].iter().collect();
+    /// assert_eq!(2, std::cmp::min(num.count_distinct() + 1, num.count_distinct_nan()));
+    /// ```
+    pub fn count_distinct_nan(&self) -> usize {
+        self.counts.len() + self.nan_count
+    }
+
     /// Return an iterator of all of the modes
     ///
+    /// Multiple modes are retruned in the order they became a mode. NaNs are ignored.
+    ///
     /// This iterator has read only reference to the mode data structure that must be dropped to
-    /// continue modifying the mode. Constant time.
+    /// continue modifying the mode.
+    ///
+    /// Constant time.
     ///
     /// # Examples
     ///
@@ -652,19 +703,49 @@ impl<T: Float + ToBytes> Mode<T> {
     ///     assert!(it.next().is_none());
     /// }
     /// ```
-    pub fn modes(&self) -> Copied<Iter<T>> {
+    pub fn modes(&self) -> impl Iterator<Item = T> + '_ {
         self.mode.iter().copied()
+    }
+
+    /// gets an option for if nan would be in the mode
+    fn nan_mode(&self) -> Option<T> {
+        if self.nan_count > 0 && self.nan_count >= self.mode_count {
+            Some(T::nan())
+        } else {
+            None
+        }
+    }
+
+    /// Return an iterator of all of the modes
+    ///
+    /// This iterator will include NaN if present as a mode. NaN will always be returned last
+    ///
+    /// Constant time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mode: inc_stats::Mode<_> = [std::f64::NAN, 5.0].iter().collect();
+    /// let mut it = mode.modes_nan();
+    /// assert_eq!(Some(5.0), it.next());
+    /// assert!(it.next().unwrap().is_nan());
+    /// assert!(it.next().is_none());
+    /// ```
+    pub fn modes_nan(&self) -> impl Iterator<Item = T> + '_ {
+        self.modes().chain(self.nan_mode())
     }
 
     /// Return the current mode
     ///
     /// If multiple modes exist, this returns the first element that reached the largest count.
-    /// NaNs are ignored when computing the mode. Constant time.
+    /// NaNs are ignored when computing the mode.
+    ///
+    /// Constant time.
     ///
     /// # Examples
     ///
     /// ```
-    /// let mode: inc_stats::Mode = [2.0, 4.0, std::f64::NAN, 4.0].iter().collect();
+    /// let mode: inc_stats::Mode<_> = [2.0, 4.0, std::f64::NAN, 4.0].iter().collect();
     /// assert_eq!(4.0, mode.mode().unwrap());
     /// ```
     ///
@@ -676,6 +757,27 @@ impl<T: Float + ToBytes> Mode<T> {
         self.modes().next()
     }
 
+    /// Return the current mode
+    ///
+    /// If multiple modes exist, this returns the first element that reached the largest count that
+    /// wasn't NaN. NaN will be returned only if it is the unique mode.
+    ///
+    /// Constant time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mode: inc_stats::Mode<_> = [2.0, 4.0, std::f64::NAN, std::f64::NAN].iter().collect();
+    /// assert!(mode.mode_nan().unwrap().is_nan());
+    /// ```
+    pub fn mode_nan(&self) -> Option<T> {
+        if self.nan_count > self.mode_count {
+            Some(T::nan())
+        } else {
+            self.mode()
+        }
+    }
+
     /// Return the number of times the mode occurred
     ///
     /// Constant time.
@@ -683,11 +785,27 @@ impl<T: Float + ToBytes> Mode<T> {
     /// # Examples
     ///
     /// ```
-    /// let mode: inc_stats::Mode = [2.0, 4.0, std::f64::NAN, 4.0].iter().collect();
+    /// let mode: inc_stats::Mode<_> = [2.0, 4.0, std::f64::NAN, 4.0].iter().collect();
     /// assert_eq!(2, mode.mode_count());
     /// ```
     pub fn mode_count(&self) -> usize {
         self.mode_count
+    }
+
+    /// Return the number of times the mode occurred
+    ///
+    /// Counts NaNs as a possible mode.
+    ///
+    /// Constant time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mode: inc_stats::Mode<_> = [2.0, 4.0, std::f64::NAN, std::f64::NAN].iter().collect();
+    /// assert_eq!(2, mode.mode_count_nan());
+    /// ```
+    pub fn mode_count_nan(&self) -> usize {
+        cmp::max(self.mode_count, self.nan_count)
     }
 }
 
@@ -747,11 +865,17 @@ mod tests {
 
     #[test]
     fn nan_percentile_test() {
-        let percs: Percentiles = [f64::NAN].iter().collect();
+        let percs: Percentiles<_> = [f64::NAN].iter().collect();
         // we know we put something in
         assert_eq!(1, percs.count());
         // but don't have enough data to get median
         assert_eq!(None, percs.median());
+    }
+
+    #[test]
+    fn nan_mode_test() {
+        let avg: Mode<_> = [f64::NAN].iter().collect();
+        assert!(avg.mode_nan().unwrap().is_nan());
     }
 
     #[test]
