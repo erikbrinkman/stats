@@ -20,5 +20,4 @@ doc = false
 
 [dependencies]
 clap = "^2.33"
-order-stat = "^0.1"
 num-traits = "^0.2"

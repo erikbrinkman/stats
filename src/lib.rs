@@ -324,7 +324,7 @@ impl<T: Float + FromPrimitive> CachedOrdering<T> {
                 Some(&ind) => ind,
                 None => self.data.len(),
             };
-            order_stat::kth_by(&mut self.data[start..end], index - start, |a, b| {
+            self.data[start..end].select_nth_unstable_by(index - start, |a, b| {
                 // we filter out nans
                 a.partial_cmp(b).unwrap()
             });
