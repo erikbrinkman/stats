@@ -3,13 +3,13 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, StdinLock, StdoutLock, Write};
 use std::iter;
 
-use clap::{App, Arg, ArgGroup, ArgMatches};
+use clap::{crate_version, App, Arg, ArgGroup, ArgMatches};
 
 use inc_stats::{Mode, Percentiles, SummStats};
 
 fn parse_command_line<'a>() -> ArgMatches<'a> {
     App::new("stats")
-        .version("1.0")
+        .version(crate_version!())
         .author("Erik Brinkman <erik.brinkman@gmail.com>")
         .about("Compute summary statistics of streams of numbers")
         // Output
