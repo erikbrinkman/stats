@@ -1,6 +1,6 @@
 [package]
 name = "stats-cli"
-version = "3.0.0"
+version = "3.0.1"
 authors = ["Erik Brinkman <erik.brinkman@gmail.com>"]
 readme = "README.md"
 homepage = "https://github.com/erikbrinkman/stats"
@@ -8,7 +8,7 @@ documentation = "https://docs.rs/stats-cli"
 repository = "https://github.com/erikbrinkman/stats"
 license = "MIT"
 description = "A command line statistics binary and package"
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "inc_stats"
@@ -19,5 +19,5 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-clap = "^2.33"
+clap = "^2.34"
 num-traits = "^0.2"
